@@ -56,3 +56,6 @@ Clone the repository on your local machine, and run the frontend server.
 
 ## Acknowledgment:
 <img src="https://github.com/NSTiwari/Gemma-4-on-TPU/blob/main/google-logo.png">
+
+
+This project was developed as part of Google’s AI Developer Programs TPU Sprint. I sincerely thank the Google AIDP Team for their generous support in providing GCP credits to help facilitate this project.
