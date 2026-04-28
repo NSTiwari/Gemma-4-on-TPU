@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inference Gemma 4 on TPU v6e with vLLM</title>
+
+<!-- Lightweight Markdown Parser -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+  /* Base reset and styling */
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: #f4f4f5;
+    margin: 0;
+    color: #18181b;
+  }
+
+  .container {
+    max-width: 1000px;
+    margin: auto;
+    padding: 40px 20px;
+  }
+
+  /* Header adjustments */
+  h1 {
+    font-size: 28px;
+    margin: 0 0 10px 0;
+    text-align: center;
+    font-weight: 700;
+  }
+
+  .sub-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 18px; 
+    color: #52525b;
+    margin-bottom: 30px;
+  }
+
+  .sub-header img {
+    height: 22px; 
+    display: block;
+  }
+
+  /* Layout Grid */
+  .layout-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 768px) {
+    .layout-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Card styling */
+  .card {
+    background: white;
+    border: 1px solid #e4e4e7;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 16px 0;
+    color: #18181b;
+  }
+
+  /* Input section elements */
+  .tabs {
+    display: inline-flex;
+    background: #f4f4f5;
+    border-radius: 8px;
+    padding: 4px;
+    margin-bottom: 16px;
+    width: fit-content;
+  }
+
+  .tab {
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #52525b;
+    transition: all 0.2s;
+  }
+
+  .tab.active {
+    background: white;
+    color: #18181b;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+
+  #imageSection {
+    margin-bottom: 16px;
+  }
+
+  /* Image Upload Section */
+  .drop-zone {
+    padding: 30px 20px;
+    border: 2px dashed #d4d4d8;
+    border-radius: 12px;
+    text-align: center;
+    color: #71717a;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #fafafa;
+  }
+
+  .drop-zone:hover {
+    border-color: #a1a1aa;
+    background: #f4f4f5;
+  }
+
+  .drop-zone.dragover {
+    border-color: #18181b;
+    background: #f4f4f5;
+  }
+
+  /* Preview Image - Fixed Cropping */
+  #preview {
+    width: 100%;
+    height: auto;
+    display: block;
+    margin: 16px auto 0 auto;
+    border-radius: 8px;
+    border: 1px solid #e4e4e7;
+  }
+
+  textarea {
+    width: 100%;
+    height: 80px;
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid #d4d4d8;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    transition: border-color 0.2s;
+  }
+
+  textarea:focus {
+    outline: none;
+    border-color: #a1a1aa;
+  }
+
+  .hidden {
+    display: none !important;
+  }
+
+  button {
+    margin-top: 20px;
+    width: 100%;
+    padding: 14px;
+    background: #18181b;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 500;
+    transition: background 0.2s, opacity 0.2s;
+  }
+
+  button:hover:not(:disabled) {
+    background: #27272a;
+  }
+
+  button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* Output section */
+  .output-container {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .output {
+    font-size: 15px;
+    line-height: 1.6;
+    color: #3f3f46;
+    background: #fafafa;
+    border: 1px solid #e4e4e7;
+    border-radius: 10px;
+    padding: 16px;
+    overflow-y: auto;
+    max-height: 500px;
+  }
+
+  /* Markdown specific styles */
+  .output h1, .output h2, .output h3 { margin-top: 0; margin-bottom: 10px; color: #18181b; }
+  .output p { margin-top: 0; margin-bottom: 12px; }
+  .output p:last-child { margin-bottom: 0; }
+  .output ul, .output ol { margin-top: 0; margin-bottom: 12px; padding-left: 20px; }
+  .output strong { font-weight: 600; color: #18181b; }
+  .output pre { background: #e4e4e7; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 13.5px;}
+  .output code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: #e4e4e7; padding: 2px 5px; border-radius: 4px; font-size: 13.5px;}
+  .output pre code { background: transparent; padding: 0; }
+
+  /* Canvas and Labels UI */
+  #resultCanvas {
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid #e4e4e7;
+    display: block;
+  }
+
+  .labels-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .detected-label {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: white;
+    text-transform: capitalize;
+  }
+
+  /* Spinner and Loading State */
+  .loading-state {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 500;
+    color: #71717a;
+  }
+
+  .spinner {
+    width: 22px;
+    height: 22px;
+    border: 3px solid #e4e4e7;
+    border-top-color: #18181b;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Custom Stats UI */
+  .stats-container {
+    display: flex;
+    gap: 24px;
+    margin-top: 24px; 
+    padding-top: 20px;
+    border-top: 1px solid #e4e4e7;
+  }
+
+  .stat-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .stat-label {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: white;
+    width: fit-content;
+  }
+
+  .bg-red { background-color: #ef4444; }
+  .bg-green { background-color: #22c55e; }
+
+  .stat-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: #18181b;
+    padding-left: 2px;
+  }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>Inference Gemma 4 on TPU v6e with vLLM</h1>
+
+  <div class="sub-header">
+    Made with ❤️ by 
+    <img src="google-logo.png" alt="Google logo" onerror="this.style.display='none'">
+    Nitin Tiwari
+  </div>
+
+  <div class="layout-grid">
+    
+    <!-- Left Column: Input -->
+    <div class="card">
+      <div class="tabs">
+        <div class="tab active" onclick="switchMode('text')">Text</div>
+        <div class="tab" onclick="switchMode('image')">Image</div>
+      </div>
+
+      <div id="imageSection" class="hidden">
+        <div class="drop-zone" id="dropZone">
+          Drop image here or click to upload
+          <input type="file" id="imageInput" hidden accept="image/*">
+        </div>
+        <img id="preview" class="hidden">
+      </div>
+
+      <!-- Removed default content from text area -->
+      <textarea id="prompt" placeholder="Enter your prompt here..."></textarea>
+
+      <button id="submitBtn" onclick="sendRequest()">Run inference</button>
+    </div>
+
+    <!-- Right Column: Output & Stats -->
+    <div class="card">
+      <div class="output-container">
+        <h3 class="card-title">Response</h3>
+        
+        <!-- Standard Text Output (Supports Markdown) -->
+        <div class="output" id="output">Waiting for input...</div>
+
+        <!-- Detected Image Canvas Output (Hidden by default) -->
+        <div id="canvasOutput" class="hidden">
+          <canvas id="resultCanvas"></canvas>
+          <div id="detectedLabels" class="labels-container"></div>
+        </div>
+        
+        <!-- Stats -->
+        <div class="stats-container">
+          <div class="stat-box">
+            <span class="stat-label bg-red">Latency</span>
+            <span class="stat-value" id="val-latency">-- s</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label bg-green">Token Count</span>
+            <span class="stat-value" id="val-tokens">--</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+let mode = "text";
+let base64Image = "";
+
+/* DOM Elements */
+const imageSection = document.getElementById("imageSection");
+const preview = document.getElementById("preview");
+const output = document.getElementById("output");
+const canvasOutput = document.getElementById("canvasOutput");
+const valLatency = document.getElementById("val-latency");
+const valTokens = document.getElementById("val-tokens");
+const promptEl = document.getElementById("prompt");
+const submitBtn = document.getElementById("submitBtn");
+
+/* Mode switch */
+function switchMode(m) {
+  mode = m;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+
+  if (m === "text") {
+    document.querySelectorAll(".tab")[0].classList.add("active");
+    imageSection.classList.add("hidden");
+  } else {
+    document.querySelectorAll(".tab")[1].classList.add("active");
+    imageSection.classList.remove("hidden");
+  }
+}
+
+/* Drag & drop */
+const dropZone = document.getElementById("dropZone");
+const input = document.getElementById("imageInput");
+
+dropZone.onclick = () => input.click();
+
+dropZone.addEventListener("dragover", e => {
+  e.preventDefault();
+  dropZone.classList.add("dragover");
+});
+
+dropZone.addEventListener("dragleave", () => {
+  dropZone.classList.remove("dragover");
+});
+
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+  handleFile(e.dataTransfer.files[0]);
+});
+
+input.addEventListener("change", e => {
+  handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    base64Image = e.target.result;
+    preview.src = base64Image;
+    preview.classList.remove("hidden"); // Ensure preview shows when new file selected
+    
+    // Reset output section states visually
+    canvasOutput.classList.add("hidden");
+    output.classList.remove("hidden");
+    output.innerHTML = "Waiting for input...";
+  };
+  if (file) reader.readAsDataURL(file);
+}
+
+/* Helper to generate random RGB colors */
+function getRandomColor() {
+  const r = Math.floor(Math.random() * 256);
+  const g = Math.floor(Math.random() * 256);
+  const b = Math.floor(Math.random() * 256);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/* Try parsing Markdown-wrapped JSON safely */
+function parseJSONSafe(text) {
+  try {
+    let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanText);
+  } catch (e) {
+    return null;
+  }
+}
+
+/* Draw bounding boxes on canvas */
+function drawBoundingBoxes(imgSrc, detections) {
+  const canvas = document.getElementById("resultCanvas");
+  const ctx = canvas.getContext("2d");
+  const labelsContainer = document.getElementById("detectedLabels");
+
+  const img = new Image();
+  img.onload = () => {
+    // Utilize natural height/width for absolutely precise coordinate mapping
+    const natWidth = img.naturalWidth || img.width;
+    const natHeight = img.naturalHeight || img.height;
+
+    canvas.width = natWidth;
+    canvas.height = natHeight;
+    ctx.drawImage(img, 0, 0);
+
+    const labelColorMap = {};
+    labelsContainer.innerHTML = '';
+
+    detections.forEach(det => {
+      if (!det.box_2d || !det.label) return;
+
+      const label = det.label;
+      const box = det.box_2d;
+
+      // Assign a random color to each unique label
+      if (!labelColorMap[label]) {
+        labelColorMap[label] = getRandomColor();
+
+        // Render UI Pill label below image
+        const pill = document.createElement("span");
+        pill.className = "detected-label";
+        pill.style.backgroundColor = labelColorMap[label];
+        pill.innerText = label;
+        labelsContainer.appendChild(pill);
+      }
+
+      const color = labelColorMap[label];
+
+      // Format:[ymin, xmin, ymax, xmax] relative to 1000x1000 Grid
+      // Multiplying by the actual image dimensions normalizes it correctly.
+      const ymin = (box[0] / 1000) * natHeight;
+      const xmin = (box[1] / 1000) * natWidth;
+      const ymax = (box[2] / 1000) * natHeight;
+      const xmax = (box[3] / 1000) * natWidth;
+
+      const width = xmax - xmin;
+      const height = ymax - ymin;
+
+      // Draw bounding box
+      ctx.lineWidth = Math.max(2, natWidth * 0.004); 
+      ctx.strokeStyle = color;
+      ctx.strokeRect(xmin, ymin, width, height);
+
+      // Label background setup
+      const fontSize = Math.max(14, natWidth * 0.02);
+      ctx.font = `600 ${fontSize}px Inter, sans-serif`;
+      const textWidth = ctx.measureText(label).width;
+      const paddingX = 12;
+      const paddingY = 10;
+
+      // Draw inside the top-left of the box
+      ctx.fillStyle = color;
+      ctx.fillRect(xmin, ymin, textWidth + paddingX, fontSize + paddingY);
+
+      // Draw white text over the background
+      ctx.fillStyle = "#ffffff";
+      ctx.textBaseline = "top";
+      ctx.fillText(label, xmin + (paddingX / 2), ymin + (paddingY / 2));
+    });
+  };
+  img.src = imgSrc;
+}
+
+/* Request */
+async function sendRequest() {
+  const promptValue = promptEl.value;
+
+  // Validation
+  if (!promptValue.trim()) {
+    alert("Please enter a prompt.");
+    return;
+  }
+  
+  if (mode === "image" && !base64Image) {
+    alert("Please upload an image first.");
+    return;
+  }
+
+  let content =[{ type: "text", text: promptValue }];
+
+  if (mode === "image") {
+    content.push({
+      type: "image_url",
+      image_url: { url: base64Image }
+    });
+  }
+
+  const payload = {
+    model: "google/gemma-4-26B-A4B-it",
+    messages:[{ role: "user", content }],
+    max_tokens: 200
+  };
+
+  // Reset UI for loading state
+  submitBtn.disabled = true;
+  valLatency.innerText = "-- s";
+  valTokens.innerText = "--";
+  
+  canvasOutput.classList.add("hidden");
+  output.classList.remove("hidden");
+  
+  output.innerHTML = `
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <span>Running inference...</span>
+    </div>
+  `;
+
+  let responseText = "";
+  let usage = {};
+  let latencySec = 0;
+
+  try {
+    const start = performance.now();
+    const res = await fetch("http://YOUR_EXTERNAL_IP:8000/v1/chat/completions", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    
+    // Calculate latency strictly measuring API request time
+    const end = performance.now();
+    latencySec = ((end - start) / 1000).toFixed(2);
+    
+    responseText = data.choices?.[0]?.message?.content || "";
+    usage = data.usage || {};
+
+    const parsedData = parseJSONSafe(responseText);
+
+    // If response is successfully parsed as an array of bounding boxes
+    if (mode === "image" && parsedData && Array.isArray(parsedData) && parsedData.length > 0 && parsedData[0].box_2d) {
+      output.classList.add("hidden");
+      canvasOutput.classList.remove("hidden");
+      
+      // Hide left side preview to eliminate redundancy
+      preview.classList.add("hidden"); 
+      
+      drawBoundingBoxes(base64Image, parsedData);
+    } else {
+      // Standard Text Output - Ensure preview remains visible
+      canvasOutput.classList.add("hidden");
+      output.classList.remove("hidden");
+      if (mode === "image") preview.classList.remove("hidden");
+      
+      // Parse markdown to HTML
+      output.innerHTML = marked.parse(responseText || JSON.stringify(data, null, 2));
+    }
+
+    // Populate Metadata UI
+    valLatency.innerText = `${latencySec} s`;
+    valTokens.innerText = `${usage.total_tokens || 0}`; 
+    promptEl.value = "";
+
+  } catch (err) {
+    canvasOutput.classList.add("hidden");
+    output.classList.remove("hidden");
+    if (mode === "image" && base64Image) preview.classList.remove("hidden");
+    output.style.color = "#ef4444";
+    output.innerHTML = `<strong>Error:</strong> ${err.message}`;
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+</script>
+
+</body>
+</html>
